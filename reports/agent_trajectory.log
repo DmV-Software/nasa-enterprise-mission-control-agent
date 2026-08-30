@@ -1,1 +1,24 @@
 [2026-08-30T06:08:13.747698600] USER_QUERY: "latest available astro photos" | DETECTED_TOPIC: rate_limit_error | STATUS: UPLINK_FAILURE_HANDLED
+[2026-08-30T18:21:06.580465600] USER_QUERY: "GIVE ME latest available astro photos" | DETECTED_TOPIC: rate_limit_error | STATUS: UPLINK_FAILURE_HANDLED
+[2026-08-30T18:41:14.176756400] USER_QUERY: "GIVE ME latest available astro photos" | DETECTED_TOPIC: rate_limit_error | STATUS: UPLINK_FAILURE_HANDLED
+[2026-08-30T18:41:50.573630900] USER_QUERY: "GIVE ME latest available astro photos" | DETECTED_TOPIC: rate_limit_error | STATUS: UPLINK_FAILURE_HANDLED
+[2026-08-30T18:46:15.828680900] USER_QUERY: "GIVE ME latest available astro photos" | DETECTED_TOPIC: rate_limit_error | STATUS: UPLINK_FAILURE_HANDLED
+[2026-08-30T18:47:01.212052100] USER_QUERY: "GIVE ME latest available astro photos" | DETECTED_TOPIC: clarification_required | STATUS: BYPASSED_CLARIFICATION
+[2026-08-30T18:48:03.413980300] USER_QUERY: "Astronomy Picture of the Day (APOD) latest available" | DETECTED_TOPIC: astronomy_picture_day | STATUS: SUCCESS_REPORT_SAVED
+[2026-08-30T18:53:01.416854400] USER_QUERY: "give me the space weather risk briefing and check for" | DETECTED_TOPIC: clarification_required | STATUS: BYPASSED_CLARIFICATION
+[2026-08-30T18:54:25.425435100] USER_QUERY: "2026/08/23 - 2026/08/30" | DETECTED_TOPIC: clarification_required | STATUS: BYPASSED_CLARIFICATION
+[2026-08-30T18:55:24.122642300] USER_QUERY: "give me the space weather risk briefing and check for these period" | DETECTED_TOPIC: clarification_required | STATUS: BYPASSED_CLARIFICATION
+[2026-08-30T18:56:43.229101100] USER_QUERY: "give me the space weather risk briefing and check for these period: 2026/08/23 - 2026/08/30" | DETECTED_TOPIC: space_weather_briefing | STATUS: SUCCESS_REPORT_SAVED
+[2026-08-30T19:08:29.300590200] USER_QUERY: "give me the space weather risk briefing and check for these period: 2026/08/23 - 2026/08/30" | DETECTED_TOPIC: rate_limit_error | STATUS: UPLINK_FAILURE_HANDLED
+[2026-08-30T19:12:19.896640700] USER_QUERY: "give me the space weather risk briefing and check for these period: 2026/08/23 - 2026/08/30" | DETECTED_TOPIC: rate_limit_error | STATUS: UPLINK_FAILURE_HANDLED
+[2026-08-30T19:13:10.190269300] USER_QUERY: "give me the space weather risk briefing and check for these period: 2026/08/23 - 2026/08/30" | DETECTED_TOPIC: rate_limit_error | STATUS: UPLINK_FAILURE_HANDLED
+[2026-08-30T19:14:56.394207500] USER_QUERY: "give me the space weather risk briefing and check for these period: 2026/08/23 - 2026/08/30" | DETECTED_TOPIC: space_weather_briefing | STATUS: SUCCESS_REPORT_SAVED
+[2026-08-30T19:16:03.355370300] USER_QUERY: "give me the space weather risk briefing and check for these period: 2026/08/23 - 2026/08/30" | DETECTED_TOPIC: space_weather_risk_briefing | STATUS: SUCCESS_REPORT_SAVED
+[2026-08-30T19:22:22.638505] USER_QUERY: "give me today's space digest combining apod, recent curiosity photos, and earth epic imagery" | DETECTED_TOPIC: daily_space_digest | STATUS: SUCCESS_REPORT_SAVED
+[2026-08-30T19:25:38.349978500] USER_QUERY: "give me today's space digest combining apod, recent available curiosity photos, and earth epic imagery latest available" | DETECTED_TOPIC: daily_space_digest | STATUS: SUCCESS_REPORT_SAVED
+[2026-08-30T19:28:19.052793800] USER_QUERY: "give me today's space digest combining apod, available curiosity photos for the previous 6 month, and earth epic imagery latest available for the previous month" | DETECTED_TOPIC: space_digest | STATUS: SUCCESS_REPORT_SAVED
+[2026-08-30T19:30:28.288045700] USER_QUERY: "where can i see Earth Polychromatic Imaging you found?" | DETECTED_TOPIC: rate_limit_error | STATUS: UPLINK_FAILURE_HANDLED
+[2026-08-30T19:31:49.435155300] USER_QUERY: "give me today's space digest combining apod, available curiosity photos for the previous 6 month, and earth epic imagery latest available for the previous month" | DETECTED_TOPIC: rate_limit_error | STATUS: UPLINK_FAILURE_HANDLED
+[2026-08-30T19:32:29.595495900] USER_QUERY: "give me today's space digest combining apod, available curiosity photos for the previous 6 month, and earth epic imagery latest available for the previous month" | DETECTED_TOPIC: rate_limit_error | STATUS: UPLINK_FAILURE_HANDLED
+[2026-08-30T19:33:21.540135700] USER_QUERY: "give me today's space digest combining apod, available curiosity photos for the previous 6 month, and earth epic imagery latest available for the previous month" | DETECTED_TOPIC: space_digest | STATUS: SUCCESS_REPORT_SAVED
+[2026-08-30T19:34:59.852209300] USER_QUERY: "where can i see Earth Polychromatic Imaging epic_1b_20260730000830 you found?" | DETECTED_TOPIC: earth_epic_imagery | STATUS: SUCCESS_REPORT_SAVED

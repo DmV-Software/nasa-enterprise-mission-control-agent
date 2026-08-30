@@ -7,8 +7,6 @@ import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.service.AiServices;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
@@ -16,8 +14,28 @@ import java.util.stream.Collectors;
 
 
 public class Main {
+
+    /**
+     * Model fallback chain, tried in order for every request. If the primary model returns
+     * 429 / 503 / RESOURCE_EXHAUSTED / a quota error across ALL available API keys, the whole
+     * chain-of-keys retry is repeated on the next model down before giving up entirely.
+     * Index 0 is primary; used by EvalRunner too, so baseline vs agent stays a fair comparison
+     * (both go through the same resilience layer).
+     */
+    public static final String[] MODEL_FALLBACK_CHAIN = {
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite"
+    };
+
     private static List<String> apiKeys;
     private static int currentKeyIndex = 0;
+
+    /** Builds a ChatLanguageModel for a given model name + key, then invokes the caller with it. */
+    @FunctionalInterface
+    public interface ChatCaller {
+        String call(ChatLanguageModel model, String currentDate, String userMessage) throws Exception;
+    }
 
     public static void main(String[] args) {
         String rawKeys = System.getenv("GEMINI_API_KEYS");
@@ -48,6 +66,7 @@ public class Main {
         System.out.println("╚════════════════════════════════════════════════════════════════╝");
         System.out.println("\u001B[00m");
         System.out.println("\u001B[32m[STATUS] Secure API Key Pool Active (" + apiKeys.size() + " keys loaded)\u001B[00m");
+        System.out.println("\u001B[32m[STATUS] Model fallback chain: " + String.join(" -> ", MODEL_FALLBACK_CHAIN) + "\u001B[00m");
         System.out.println("\u001B[32m[STATUS] NASA Enterprise 10-Tool Agent initialized. Reference date: " + currentDate + "\u001B[00m");
         System.out.println("Type 'evals' to run automated test suite, or 'exit' to quit.");
 
@@ -62,19 +81,25 @@ public class Main {
                 break;
             }
 
+            if (userInput.trim().equalsIgnoreCase("evals")) {
+                EvalRunner.run(apiKeys, currentDate);
+                continue;
+            }
+
             if (userInput.trim().isEmpty()) {
                 continue;
             }
 
             try {
-                System.out.println("\u001B[36m[SYSTEM] Processing request via Key #" + (currentKeyIndex + 1) + "...\u001B[00m");
+                System.out.println("\u001B[36m[SYSTEM] Processing request...\u001B[00m");
                 String response = callAgentWithKeyRotation(currentDate, userInput);
                 System.out.println("\n" + response);
                 saveReportToFile(response, userInput);
             } catch (Exception e) {
                 String fallbackResponse = "[TOPIC: uplink_failure]\n\n" +
                         "**[CRITICAL SYSTEM ALERT]** Mission Control has lost uplink with the core scientific intelligence module.\n" +
-                        "**Diagnostic:** All secure API keys in the rotation pool are temporarily exhausted due to rate limit restrictions.\n" +
+                        "**Diagnostic:** All secure API keys AND all fallback models (" + String.join(", ", MODEL_FALLBACK_CHAIN) + ") " +
+                        "are temporarily exhausted due to rate limit restrictions.\n" +
                         "**Action Required:** Please stand by and re-transmit your query in a few moments once the network window resets.";
 
                 System.out.println("\n" + fallbackResponse);
@@ -84,44 +109,95 @@ public class Main {
     }
 
 
-    public static NasaAgent createAgent(String apiKey) {
-        ChatLanguageModel model = GoogleAiGeminiChatModel.builder()
-                .apiKey(apiKey)
-                .modelName("gemini-3.5-flash")
-                .temperature(0.2)
-                .build();
+    /**
+     * Runs one chat turn through the full resilience layer: for each model in
+     * MODEL_FALLBACK_CHAIN (best first), tries every available API key (rotating on
+     * rate-limit-style errors) before giving up on that model and dropping to the next one.
+     * Non-rate-limit errors (bad request, auth failure, etc.) are NOT retried — they propagate
+     * immediately, since retrying a broken request across every model/key combination would
+     * just waste quota on an error that won't fix itself.
+     */
+    public static String callWithFallback(String currentDate, String userMessage, ChatCaller caller) {
+        Exception lastError = null;
 
-        return AiServices.builder(NasaAgent.class)
-                .chatLanguageModel(model)
-                .chatMemory(MessageWindowChatMemory.withMaxMessages(15))
-                .tools(new NasaTools())
-                .build();
+        for (String modelName : MODEL_FALLBACK_CHAIN) {
+            int attempts = 0;
+            int maxAttempts = apiKeys.size();
+
+            while (attempts < maxAttempts) {
+                String activeKey = apiKeys.get(currentKeyIndex);
+                try {
+                    ChatLanguageModel chatModel = GoogleAiGeminiChatModel.builder()
+                            .apiKey(activeKey)
+                            .modelName(modelName)
+                            .temperature(0.2)
+                            .build();
+
+                    String result = caller.call(chatModel, currentDate, userMessage);
+
+                    if (!modelName.equals(MODEL_FALLBACK_CHAIN[0])) {
+                        System.out.println("\u001B[33m[SYSTEM] Served by fallback model: " + modelName + "\u001B[00m");
+                    }
+                    return result;
+                } catch (Exception e) {
+                    lastError = e;
+                    String msg = e.getMessage() != null ? e.getMessage() : "";
+                    boolean isRateLimit = msg.contains("429") || msg.contains("RESOURCE_EXHAUSTED")
+                            || msg.contains("503") || msg.toLowerCase().contains("quota");
+
+                    if (!isRateLimit) {
+                        // Not a capacity problem (e.g. malformed request, auth failure) — don't burn
+                        // through every model/key combination retrying something that can't succeed.
+                        throw new RuntimeException(e);
+                    }
+
+                    if (apiKeys.size() > 1) {
+                        System.out.println("\u001B[33m[WARNING] Key #" + (currentKeyIndex + 1) + " on model " + modelName +
+                                " hit a rate limit. Rotating to next API key...\u001B[00m");
+                        currentKeyIndex = (currentKeyIndex + 1) % apiKeys.size();
+                        attempts++;
+                    } else {
+                        break; // only one key — no point looping, drop straight to the next model
+                    }
+                }
+            }
+            System.out.println("\u001B[33m[WARNING] Model " + modelName + " exhausted across all available keys. " +
+                    "Falling back to next model in chain...\u001B[00m");
+        }
+
+        throw new RuntimeException("All models (" + String.join(", ", MODEL_FALLBACK_CHAIN) +
+                ") and API keys exhausted.", lastError);
     }
 
 
     public static String callAgentWithKeyRotation(String currentDate, String input) {
-        int attempts = 0;
-        int maxAttempts = apiKeys.size();
+        return callWithFallback(currentDate, input, (model, date, msg) -> {
+            NasaAgent agent = AiServices.builder(NasaAgent.class)
+                    .chatLanguageModel(model)
+                    .chatMemory(MessageWindowChatMemory.withMaxMessages(15))
+                    .tools(new NasaTools())
+                    .build();
+            return agent.chat(date, msg);
+        });
+    }
 
-        while (attempts < maxAttempts) {
-            String activeKey = apiKeys.get(currentKeyIndex);
-            try {
-                NasaAgent agent = createAgent(activeKey);
-                return agent.chat(currentDate, input);
-            } catch (Exception e) {
-                String msg = e.getMessage() != null ? e.getMessage() : "";
-                boolean isRateLimit = msg.contains("429") || msg.contains("RESOURCE_EXHAUSTED") || msg.contains("503");
 
-                if (isRateLimit && apiKeys.size() > 1) {
-                    System.out.println("\u001B[33m[WARNING] Key #" + (currentKeyIndex + 1) + " hit rate limit. Rotating to next API key instantly...\u001B[00m");
-                    currentKeyIndex = (currentKeyIndex + 1) % apiKeys.size();
-                    attempts++;
-                } else {
-                    throw e;
-                }
-            }
+    /**
+     * Pulls the "[TOPIC: some_topic]" tag the agent is instructed to put on the first line
+     * of every response (see NasaAgent's system prompt). Falls back to "general_mission" if
+     * the tag is missing or malformed, so a report is never lost just because the LLM
+     * didn't follow formatting instructions exactly.
+     */
+    public static String extractTopic(String reportContent) {
+        if (reportContent == null) {
+            return "general_mission";
         }
-        throw new RuntimeException("All API keys in the rotation pool are exhausted.");
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("^\\[TOPIC:\\s*([a-zA-Z0-9_]+)\\]");
+        java.util.regex.Matcher matcher = pattern.matcher(reportContent.trim());
+        if (matcher.find()) {
+            return matcher.group(1).toLowerCase();
+        }
+        return "general_mission";
     }
 
 
@@ -133,15 +209,7 @@ public class Main {
                 java.nio.file.Files.createDirectories(reportsDir);
             }
 
-            String topic = "general_mission";
-
-            // Extract the topic tag generated by the AI agent
-            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("^\\[TOPIC:\\s*([a-zA-Z0-9_]+)\\]");
-            java.util.regex.Matcher matcher = pattern.matcher(reportContent.trim());
-
-            if (matcher.find()) {
-                topic = matcher.group(1).toLowerCase();
-            }
+            String topic = extractTopic(reportContent);
 
             if (topic.equals("clarification_required")) {
                 System.out.println("\n\u001B[33m[SYSTEM] Pending user clarification. Report saving bypassed.\u001B[00m");
