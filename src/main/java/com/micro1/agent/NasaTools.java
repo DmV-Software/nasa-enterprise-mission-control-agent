@@ -3,11 +3,14 @@ package com.micro1.agent;
 
 import dev.langchain4j.agent.tool.Tool;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 
 public class NasaTools {
@@ -128,21 +131,79 @@ public class NasaTools {
     }
 
 
-    @Tool("Searches NASA Exoplanet Archive for confirmed exoplanet data using a SQL-like query parameter.")
-    public String getExoplanetArchive(String queryCriteria) {
-        System.out.println("[SYSTEM] Executing getExoplanetArchive with criteria: " + queryCriteria);
-        String result = fetchFromUrl("https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+pl_name,discoverymethod,disc_year+from+ps+where+rowid<=5&format=json");
-        record("getExoplanetArchive", queryCriteria, result);
+    // Whitelist of real NASA Exoplanet Archive discoverymethod values. A whitelist (rather than
+    // splicing the LLM's raw string into SQL) keeps this a safe, structured filter instead of a
+    // TAP-injection surface, while still making the tool's declared parameter actually do something.
+    private static final Set<String> KNOWN_DISCOVERY_METHODS = Set.of(
+            "TRANSIT", "RADIAL VELOCITY", "IMAGING", "MICROLENSING", "ASTROMETRY",
+            "TRANSIT TIMING VARIATIONS", "PULSAR TIMING", "ORBITAL BRIGHTNESS MODULATION",
+            "DISK KINEMATICS", "ECLIPSE TIMING VARIATIONS"
+    );
+
+    @Tool("Searches the NASA Exoplanet Archive for confirmed exoplanets. Optionally filter by discovery " +
+            "method — one of: Transit, Radial Velocity, Imaging, Microlensing, Astrometry, Transit Timing " +
+            "Variations, Pulsar Timing. Pass an empty string for no filter.")
+    public String getExoplanetArchive(String discoveryMethod) {
+        System.out.println("[SYSTEM] Executing getExoplanetArchive with discoveryMethod: " + discoveryMethod);
+
+        String baseQuery = "select+pl_name,discoverymethod,disc_year+from+ps";
+        String normalized = discoveryMethod == null ? "" : discoveryMethod.trim().toUpperCase();
+
+        String finalQuery;
+        if (!normalized.isEmpty() && KNOWN_DISCOVERY_METHODS.contains(normalized)) {
+            // TAP query params use single-quoted string literals; discoveryMethod is checked against
+            // a fixed whitelist above, so this can never contain attacker/LLM-controlled SQL syntax.
+            String encodedFilter = URLEncoder.encode("discoverymethod='" + capitalizeWords(normalized) + "'", StandardCharsets.UTF_8);
+            finalQuery = baseQuery + "+where+" + encodedFilter + "+order+by+disc_year+desc&format=json";
+        } else {
+            finalQuery = baseQuery + "+where+rowid<=10&format=json";
+        }
+
+        String result = fetchFromUrl("https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=" + finalQuery);
+        record("getExoplanetArchive", discoveryMethod, result);
         return result;
     }
 
+    private static String capitalizeWords(String upperCaseInput) {
+        String[] words = upperCaseInput.toLowerCase().split(" ");
+        StringBuilder sb = new StringBuilder();
+        for (String w : words) {
+            if (w.isEmpty()) continue;
+            sb.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1)).append(" ");
+        }
+        return sb.toString().trim();
+    }
 
-    @Tool("Searches NASA TechPort database for cutting-edge space technology project innovations.")
+
+    @Tool("Searches NASA TechPort for space technology projects whose title or description contains the " +
+            "given keyword. Pass an empty string to get the most recent projects unfiltered.")
     public String getTechPortProjects(String searchKeyword) {
         System.out.println("[SYSTEM] Executing getTechPortProjects for keyword: " + searchKeyword);
+
+        // TechPort's public endpoint doesn't support a free-text query param, so the declared
+        // "searchKeyword" filter is applied client-side against the returned project list rather
+        // than silently ignored — the tool's description now matches what it actually does.
         String result = fetchFromUrl("https://techport.nasa.gov/api/projects?api_key=" + NASA_API_KEY);
-        record("getTechPortProjects", searchKeyword, result);
-        return result;
+
+        String finalResult = result;
+        if (searchKeyword != null && !searchKeyword.trim().isEmpty() && result != null && !result.startsWith("NASA_API_ERROR")) {
+            String needle = searchKeyword.trim().toLowerCase();
+            StringBuilder filtered = new StringBuilder("[");
+            boolean any = false;
+            for (String line : result.split("\\},\\s*\\{")) {
+                if (line.toLowerCase().contains(needle)) {
+                    if (any) filtered.append(",");
+                    filtered.append(line.startsWith("{") ? "" : "{").append(line).append(line.endsWith("}") ? "" : "}");
+                    any = true;
+                }
+            }
+            filtered.append("]");
+            finalResult = any ? filtered.toString() :
+                    "No TechPort projects matched keyword \"" + searchKeyword + "\" in this result page.";
+        }
+
+        record("getTechPortProjects", searchKeyword, finalResult);
+        return finalResult;
     }
 
 
@@ -160,6 +221,8 @@ public class NasaTools {
         int maxAttempts = 3;
         int delayMs = 1500;
         Exception lastException = null;
+        int lastStatus = -1;
+        String lastErrorBody = null;
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
@@ -168,12 +231,19 @@ public class NasaTools {
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
                 if (response.statusCode() >= 400) {
+                    lastStatus = response.statusCode();
+                    lastErrorBody = response.body();
                     if (attempt < maxAttempts) {
                         System.out.println("\u001B[33m[WARNING] NASA API returned status " + response.statusCode() +
                                 ". Retrying (" + (attempt + 1) + "/" + maxAttempts + ")...\u001B[00m");
                         Thread.sleep(delayMs);
                         continue;
                     }
+                    // Retries exhausted on an HTTP error — return an explicit, unmistakable error
+                    // marker instead of the raw error JSON body, so the LLM can't mistake an error
+                    // page for real NASA data (this was silently happening before this fix).
+                    return "NASA_API_ERROR: status=" + lastStatus + " endpoint=" + urlStr +
+                            " body_snippet=" + safeSnippet(lastErrorBody);
                 }
 
                 String body = response.body();
@@ -195,8 +265,13 @@ public class NasaTools {
                 }
             }
         }
-        return "Error communicating with NASA endpoint after " + maxAttempts + " attempts: " +
-                (lastException != null ? lastException.getMessage() : "unknown error");
+        return "NASA_API_ERROR: network failure after " + maxAttempts + " attempts, endpoint=" + urlStr +
+                " message=" + (lastException != null ? lastException.getMessage() : "unknown error");
+    }
+
+    private static String safeSnippet(String body) {
+        if (body == null) return "none";
+        return body.length() > 200 ? body.substring(0, 200) + "..." : body;
     }
 
 }
