@@ -157,17 +157,46 @@ public class NasaTools {
 
 
     private String fetchFromUrl(String urlStr) {
-        try {
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(urlStr)).GET().build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            String body = response.body();
-            if (body != null && body.length() > 4000) {
-                return body.substring(0, 4000) + "... [truncated for length]";
+        int maxAttempts = 3;
+        int delayMs = 1500;
+        Exception lastException = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                HttpClient client = HttpClient.newHttpClient();
+                HttpRequest request = HttpRequest.newBuilder().uri(URI.create(urlStr)).GET().build();
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() >= 400) {
+                    if (attempt < maxAttempts) {
+                        System.out.println("\u001B[33m[WARNING] NASA API returned status " + response.statusCode() +
+                                ". Retrying (" + (attempt + 1) + "/" + maxAttempts + ")...\u001B[00m");
+                        Thread.sleep(delayMs);
+                        continue;
+                    }
+                }
+
+                String body = response.body();
+                if (body != null && body.length() > 4000) {
+                    return body.substring(0, 4000) + "... [truncated for length]";
+                }
+                return body;
+            } catch (Exception e) {
+                lastException = e;
+                if (attempt < maxAttempts) {
+                    System.out.println("\u001B[33m[WARNING] Network error: " + e.getMessage() +
+                            ". Retrying in " + delayMs + "ms (" + (attempt + 1) + "/" + maxAttempts + ")...\u001B[00m");
+                    try {
+                        Thread.sleep(delayMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
             }
-            return body;
-        } catch (Exception e) {
-            return "Error communicating with NASA endpoint: " + e.getMessage();
         }
+        return "Error communicating with NASA endpoint after " + maxAttempts + " attempts: " +
+                (lastException != null ? lastException.getMessage() : "unknown error");
     }
+
 }

@@ -38,6 +38,7 @@ public class Main {
     }
 
     public static void main(String[] args) {
+
         String rawKeys = System.getenv("GEMINI_API_KEYS");
         if (rawKeys == null || rawKeys.trim().isEmpty()) {
             rawKeys = System.getenv("GEMINI_API_KEY");
@@ -61,9 +62,9 @@ public class Main {
 
         String currentDate = LocalDate.now().format(DateTimeFormatter.ISO_DATE);
         System.out.println("\u001B[36m");
-        System.out.println("╔════════════════════════════════════════════════════════════════╗");
-        System.out.println("║       \u202F\u202F 🚀 NASA ENTERPRISE MISSION CONTROL AGENT 🚀        ║");
-        System.out.println("╚════════════════════════════════════════════════════════════════╝");
+        System.out.println("---------------------------------------------------");
+        System.out.println("       NASA ENTERPRISE MISSION CONTROL AGENT       ");
+        System.out.println("---------------------------------------------------");
         System.out.println("\u001B[00m");
         System.out.println("\u001B[32m[STATUS] Secure API Key Pool Active (" + apiKeys.size() + " keys loaded)\u001B[00m");
         System.out.println("\u001B[32m[STATUS] Model fallback chain: " + String.join(" -> ", MODEL_FALLBACK_CHAIN) + "\u001B[00m");
