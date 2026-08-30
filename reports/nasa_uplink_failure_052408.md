@@ -1,4 +1,4 @@
-[TOPIC: critical_uplink_failure]
+[TOPIC: uplink_failure]
 
 **[CRITICAL SYSTEM ALERT]** Mission Control has lost uplink with the core scientific intelligence module.
 **Diagnostic:** All secure API keys in the rotation pool are temporarily exhausted due to rate limit restrictions.

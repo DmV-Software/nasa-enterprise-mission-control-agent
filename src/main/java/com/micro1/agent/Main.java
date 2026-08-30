@@ -78,8 +78,6 @@ public class Main {
                         "**Action Required:** Please stand by and re-transmit your query in a few moments once the network window resets.";
 
                 System.out.println("\n" + fallbackResponse);
-
-                saveReportToFile(fallbackResponse);
             }
         }
         scanner.close();
