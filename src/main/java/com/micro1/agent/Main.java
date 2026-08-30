@@ -70,7 +70,7 @@ public class Main {
                 System.out.println("\u001B[36m[SYSTEM] Processing request via Key #" + (currentKeyIndex + 1) + "...\u001B[00m");
                 String response = callAgentWithKeyRotation(currentDate, userInput);
                 System.out.println("\n" + response);
-                saveReportToFile(response);
+                saveReportToFile(response, userInput);
             } catch (Exception e) {
                 String fallbackResponse = "[TOPIC: uplink_failure]\n\n" +
                         "**[CRITICAL SYSTEM ALERT]** Mission Control has lost uplink with the core scientific intelligence module.\n" +
@@ -78,7 +78,7 @@ public class Main {
                         "**Action Required:** Please stand by and re-transmit your query in a few moments once the network window resets.";
 
                 System.out.println("\n" + fallbackResponse);
-            }
+                logTrajectory(userInput, "rate_limit_error", "UPLINK_FAILURE_HANDLED"); }
         }
         scanner.close();
     }
@@ -125,7 +125,8 @@ public class Main {
     }
 
 
-    public static void saveReportToFile(String reportContent) {
+    public static void saveReportToFile(String reportContent, String userInput) {
+        String filename = "";
         try {
             java.nio.file.Path reportsDir = java.nio.file.Path.of("reports");
             if (!java.nio.file.Files.exists(reportsDir)) {
@@ -144,17 +145,50 @@ public class Main {
 
             if (topic.equals("clarification_required")) {
                 System.out.println("\n\u001B[33m[SYSTEM] Pending user clarification. Report saving bypassed.\u001B[00m");
+                logTrajectory(userInput, "clarification_required", "BYPASSED_CLARIFICATION");
                 return;
             }
 
             String timeSuffix = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HHmmss"));
-            String filename = "reports/nasa_" + topic + "_" + timeSuffix + ".md";
+            filename = "reports/nasa_" + topic + "_" + timeSuffix + ".md";
             java.nio.file.Files.writeString(java.nio.file.Path.of(filename), reportContent);
 
             System.out.println("\n\u001B[32m[SYSTEM] Report successfully exported to: " + filename + "\u001B[00m");
+            logTrajectory(userInput, topic, "SUCCESS_REPORT_SAVED");
         } catch (Exception e) {
             System.err.println("\n[ERROR] Failed to save report to file: " + e.getMessage());
         }
+        try {
+            java.io.File mdFile = new java.io.File(filename);
+            if (java.awt.Desktop.isDesktopSupported()) {
+                java.awt.Desktop.getDesktop().open(mdFile);
+            }
+        } catch (Exception ex) {
+            System.out.println("\u001B[33m[WARNING] OS auto-open bypassed (headless mode).\u001B[00m");
+        }
     }
+
+
+    public static void logTrajectory(String userQuery, String topic, String executionStatus) {
+        try {
+            java.nio.file.Path logsDir = java.nio.file.Path.of("reports");
+            if (!java.nio.file.Files.exists(logsDir)) {
+                java.nio.file.Files.createDirectories(logsDir);
+            }
+
+            java.nio.file.Path trajectoryFile = logsDir.resolve("agent_trajectory.log");
+            String timestamp = java.time.LocalDateTime.now().toString();
+
+            String logEntry = String.format("[%s] USER_QUERY: \"%s\" | DETECTED_TOPIC: %s | STATUS: %s%n",
+                    timestamp, userQuery.replace("\n", " "), topic, executionStatus);
+
+            java.nio.file.Files.writeString(trajectoryFile, logEntry,
+                    java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.APPEND);
+        } catch (Exception e) {
+            System.err.println("[WARNING] Failed to write trajectory log.");
+        }
+    }
+
 
 }
