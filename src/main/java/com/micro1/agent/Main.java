@@ -72,7 +72,14 @@ public class Main {
                 System.out.println("\n" + response);
                 saveReportToFile(response);
             } catch (Exception e) {
-                System.err.println("\u001B[31mAll keys exhausted or critical error: " + e.getMessage() + "\u001B[00m");
+                String fallbackResponse = "[TOPIC: uplink_failure]\n\n" +
+                        "**[CRITICAL SYSTEM ALERT]** Mission Control has lost uplink with the core scientific intelligence module.\n" +
+                        "**Diagnostic:** All secure API keys in the rotation pool are temporarily exhausted due to rate limit restrictions.\n" +
+                        "**Action Required:** Please stand by and re-transmit your query in a few moments once the network window resets.";
+
+                System.out.println("\n" + fallbackResponse);
+
+                saveReportToFile(fallbackResponse);
             }
         }
         scanner.close();
