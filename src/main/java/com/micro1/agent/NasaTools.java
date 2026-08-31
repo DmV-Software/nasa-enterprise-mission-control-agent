@@ -146,20 +146,27 @@ public class NasaTools {
     public String getExoplanetArchive(String discoveryMethod) {
         System.out.println("[SYSTEM] Executing getExoplanetArchive with discoveryMethod: " + discoveryMethod);
 
-        String baseQuery = "select+pl_name,discoverymethod,disc_year+from+ps";
         String normalized = discoveryMethod == null ? "" : discoveryMethod.trim().toUpperCase();
 
-        String finalQuery;
+        // Build the ADQL as a plain, human-readable string first, THEN URL-encode the whole thing in
+        // one pass. The previous version hand-concatenated some pieces raw (e.g. "rowid<=10") and
+        // only URL-encoded the filter fragment — the unescaped '<' is not a legal URI character and
+        // made URI.create() throw for every query with no discoveryMethod filter. Encoding the full
+        // ADQL string at once means there is no piece left un-escaped, by construction.
+        String rawAdql;
         if (!normalized.isEmpty() && KNOWN_DISCOVERY_METHODS.contains(normalized)) {
-            // TAP query params use single-quoted string literals; discoveryMethod is checked against
-            // a fixed whitelist above, so this can never contain attacker/LLM-controlled SQL syntax.
-            String encodedFilter = URLEncoder.encode("discoverymethod='" + capitalizeWords(normalized) + "'", StandardCharsets.UTF_8);
-            finalQuery = baseQuery + "+where+" + encodedFilter + "+order+by+disc_year+desc&format=json";
+            // discoveryMethod is checked against a fixed whitelist above, so this can never contain
+            // attacker/LLM-controlled SQL syntax — it's a safe, structured filter, not raw SQL.
+            rawAdql = "select pl_name,discoverymethod,disc_year from ps where discoverymethod='" +
+                    capitalizeWords(normalized) + "' order by disc_year desc";
         } else {
-            finalQuery = baseQuery + "+where+rowid<=10&format=json";
+            rawAdql = "select pl_name,discoverymethod,disc_year from ps where rowid<=10";
         }
 
-        String result = fetchFromUrl("https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=" + finalQuery);
+        String encodedQuery = URLEncoder.encode(rawAdql, StandardCharsets.UTF_8);
+        String url = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=" + encodedQuery + "&format=json";
+
+        String result = fetchFromUrl(url);
         record("getExoplanetArchive", discoveryMethod, result);
         return result;
     }
@@ -224,10 +231,21 @@ public class NasaTools {
         int lastStatus = -1;
         String lastErrorBody = null;
 
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(10))
+                .build();
+
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                HttpClient client = HttpClient.newHttpClient();
-                HttpRequest request = HttpRequest.newBuilder().uri(URI.create(urlStr)).GET().build();
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(urlStr))
+                        .timeout(java.time.Duration.ofSeconds(15))
+                        // Some public/academic APIs (e.g. the Caltech-run Exoplanet Archive TAP
+                        // service) are stricter about request headers than api.nasa.gov and will
+                        // hang or reset a connection that looks like a bare bot request.
+                        .header("User-Agent", "micro1-nasa-agent/1.0 (hackathon submission)")
+                        .header("Accept", "application/json, text/plain, */*")
+                        .GET().build();
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
                 if (response.statusCode() >= 400) {
@@ -253,9 +271,14 @@ public class NasaTools {
                 return body;
             } catch (Exception e) {
                 lastException = e;
+                // Full diagnostic to the console immediately — the eval transcript's 160-char
+                // trajectory preview truncates this away (the URL alone eats most of that budget),
+                // so without this line a network failure's real cause (timeout vs. TLS vs. DNS vs.
+                // connection reset) was previously undiagnosable from the saved reports alone.
+                System.out.println("\u001B[33m[NETWORK ERROR] " + e.getClass().getSimpleName() + ": " + e.getMessage() +
+                        " (endpoint=" + urlStr + ", attempt " + attempt + "/" + maxAttempts + ")\u001B[00m");
                 if (attempt < maxAttempts) {
-                    System.out.println("\u001B[33m[WARNING] Network error: " + e.getMessage() +
-                            ". Retrying in " + delayMs + "ms (" + (attempt + 1) + "/" + maxAttempts + ")...\u001B[00m");
+                    System.out.println("\u001B[33m[WARNING] Retrying in " + delayMs + "ms (" + (attempt + 1) + "/" + maxAttempts + ")...\u001B[00m");
                     try {
                         Thread.sleep(delayMs);
                     } catch (InterruptedException ie) {
@@ -265,8 +288,11 @@ public class NasaTools {
                 }
             }
         }
-        return "NASA_API_ERROR: network failure after " + maxAttempts + " attempts, endpoint=" + urlStr +
-                " message=" + (lastException != null ? lastException.getMessage() : "unknown error");
+        String causeDetail = lastException != null
+                ? lastException.getClass().getSimpleName() + ": " + lastException.getMessage()
+                : "unknown error";
+        return "NASA_API_ERROR: network failure after " + maxAttempts + " attempts, cause=" + causeDetail +
+                ", endpoint=" + urlStr;
     }
 
     private static String safeSnippet(String body) {

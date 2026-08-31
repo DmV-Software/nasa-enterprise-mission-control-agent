@@ -28,6 +28,8 @@ public class Main {
             "gemini-3.1-flash-lite"
     };
 
+    private static final boolean QUIET = !"false".equalsIgnoreCase(System.getenv("AGENT_QUIET"));
+
     private static List<String> apiKeys;
     private static int currentKeyIndex = 0;
 
@@ -143,18 +145,29 @@ public class Main {
                 } catch (Exception e) {
                     lastError = e;
                     String msg = e.getMessage() != null ? e.getMessage() : "";
-                    boolean isRateLimit = msg.contains("429") || msg.contains("RESOURCE_EXHAUSTED")
-                            || msg.contains("503") || msg.toLowerCase().contains("quota");
+                    // 429/503/quota = capacity problem (this key/model is temporarily maxed out).
+                    // 403/PERMISSION_DENIED = access problem, but often PER-KEY: not every API key
+                    // is necessarily enabled for every model (different free-tier projects can have
+                    // different model access). Both cases are worth trying the next key for — only a
+                    // clearly non-recoverable error (bad request shape, network parse failure, etc.)
+                    // should skip straight to propagating without burning through the whole pool.
+                    boolean isRetryable = msg.contains("429") || msg.contains("RESOURCE_EXHAUSTED")
+                            || msg.contains("503") || msg.toLowerCase().contains("quota")
+                            || msg.contains("403") || msg.contains("PERMISSION_DENIED");
 
-                    if (!isRateLimit) {
-                        // Not a capacity problem (e.g. malformed request, auth failure) — don't burn
+                    if (!isRetryable) {
+                        // Not an access/capacity problem (e.g. malformed request) — don't burn
                         // through every model/key combination retrying something that can't succeed.
                         throw new RuntimeException(e);
                     }
 
                     if (apiKeys.size() > 1) {
-                        System.out.println("\u001B[33m[WARNING] Key #" + (currentKeyIndex + 1) + " on model " + modelName +
-                                " hit a rate limit. Rotating to next API key...\u001B[00m");
+                        if (!QUIET) {
+                            String reason = (msg.contains("403") || msg.contains("PERMISSION_DENIED"))
+                                    ? "was denied access (403)" : "hit a rate limit";
+                            System.out.println("\u001B[33m[WARNING] Key #" + (currentKeyIndex + 1) + " on model " + modelName +
+                                    " " + reason + ". Rotating to next API key...\u001B[00m");
+                        }
                         currentKeyIndex = (currentKeyIndex + 1) % apiKeys.size();
                         attempts++;
                     } else {
@@ -162,8 +175,9 @@ public class Main {
                     }
                 }
             }
-            System.out.println("\u001B[33m[WARNING] Model " + modelName + " exhausted across all available keys. " +
-                    "Falling back to next model in chain...\u001B[00m");
+            System.out.println("\u001B[33m[WARNING] Model " + modelName + " exhausted across all available keys" +
+                    (QUIET ? " (" + apiKeys.size() + "/" + apiKeys.size() + " denied/limited)" : "") +
+                    ". Falling back to next model in chain...\u001B[00m");
         }
 
         throw new RuntimeException("All models (" + String.join(", ", MODEL_FALLBACK_CHAIN) +
