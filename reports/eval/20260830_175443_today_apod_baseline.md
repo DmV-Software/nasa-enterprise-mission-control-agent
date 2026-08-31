@@ -1,9 +1,0 @@
-# today_apod — baseline
-
-**Query:** What is today's Astronomy Picture of the Day, including title and explanation?
-
-**Tool calls:** 0
-
-**Output:**
-
-ERROR: java.lang.RuntimeException: PERMISSION_DENIED (code 403) Your project has been denied access. Please contact support.

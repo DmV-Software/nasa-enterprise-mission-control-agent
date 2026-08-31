@@ -28,8 +28,6 @@ public class Main {
             "gemini-3.1-flash-lite"
     };
 
-    private static final boolean QUIET = !"false".equalsIgnoreCase(System.getenv("AGENT_QUIET"));
-
     private static List<String> apiKeys;
     private static int currentKeyIndex = 0;
 
@@ -162,12 +160,11 @@ public class Main {
                     }
 
                     if (apiKeys.size() > 1) {
-                        if (!QUIET) {
-                            String reason = (msg.contains("403") || msg.contains("PERMISSION_DENIED"))
-                                    ? "was denied access (403)" : "hit a rate limit";
-                            System.out.println("\u001B[33m[WARNING] Key #" + (currentKeyIndex + 1) + " on model " + modelName +
-                                    " " + reason + ". Rotating to next API key...\u001B[00m");
-                        }
+                        // One key rotation per failure, silently — five near-identical "Key #N hit a
+                        // rate limit" lines add console noise without adding much diagnostic value for
+                        // normal use or a demo recording. The summary line below (with the key count)
+                        // is enough; if you ever need to see exactly which key failed when, that's what
+                        // a debugger or a temporary System.out.println here is for.
                         currentKeyIndex = (currentKeyIndex + 1) % apiKeys.size();
                         attempts++;
                     } else {
@@ -175,9 +172,8 @@ public class Main {
                     }
                 }
             }
-            System.out.println("\u001B[33m[WARNING] Model " + modelName + " exhausted across all available keys" +
-                    (QUIET ? " (" + apiKeys.size() + "/" + apiKeys.size() + " denied/limited)" : "") +
-                    ". Falling back to next model in chain...\u001B[00m");
+            System.out.println("\u001B[33m[WARNING] Model " + modelName + " exhausted across all " + apiKeys.size() +
+                    " available key(s). Falling back to next model in chain...\u001B[00m");
         }
 
         throw new RuntimeException("All models (" + String.join(", ", MODEL_FALLBACK_CHAIN) +

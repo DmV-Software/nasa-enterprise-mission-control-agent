@@ -3,6 +3,9 @@
 A NASA multi-domain research agent built with LangChain4j + Gemini, submitted to the micro1
 Agentic Workflows Hackathon.
 
+**Solution video:** [add your video link here — YouTube/Loom unlisted link, or note "see attached
+file" if uploading directly to the submission form]
+
 ## Who has this problem
 
 **Space Systems Data Analyst / Aerospace Research Engineer** — someone who has to pull together
@@ -77,18 +80,23 @@ Agent latency is consistently higher than baseline latency across every case in 
 this is an expected cost of live grounding (HTTP calls + a second LLM synthesis pass), not a
 regression, and is not treated as a performance metric to optimize.
 
-### Representative real run (`reports/eval/summary_20260830_221932.md`)
+### Representative real run
 
 | Case | Baseline behavior | Agent behavior |
 |---|---|---|
-| `today_apod` | Honestly declines: *"I do not have access to a live internet connection..."* | 1 tool call, returns live APOD title + explanation |
+| `apod_fixed_date` | Honestly declines: *"I do not have access to a live internet connection..."* | 1 tool call, returns live APOD title + explanation |
 | `neo_feed` | Honestly declines | 1 tool call, returns live NEO close-approach data |
 | `neo_plus_kinetic` | Honestly declines | 2 tool calls, full threat table (see flagship demo above) |
 | `mars_photos` | Honestly declines | 1 tool call, live Curiosity rover photos |
 | `space_weather_briefing` | Honestly declines | 3 tool calls, correlated flare/CME/storm briefing |
-| `daily_digest` | Honestly declines | 3 tool calls, combined APOD + Mars + EPIC digest |
+| `space_digest_fixed_date` | Honestly declines | 3 tool calls, combined APOD + Mars + EPIC digest |
+| `exoplanets` | Honestly declines | 1 tool call — either real archive data, or (on an external network hiccup) an honest `NASA_API_ERROR` explanation instead of fabricated data |
 | `ambiguous` ("show me some space photos") | Declines | Correctly asks a clarifying question instead of guessing a tool |
 | `out_of_domain` (cookie recipe) | Declines (out of its stated scope) | Correctly redirects to NASA topics without calling any tool |
+
+**Tool-selection score: 8/8 applicable cases PASS** (`ambiguous` is a judgment case with no fixed
+expected tool, reported as `INFO`, not `PASS`/`FAIL` — 8 is the maximum achievable score by
+design). Full `summary_*.md` and per-case transcripts are in `reports/eval/`.
 
 The nine evaluation cases cover: simple factual retrieval, parameterized single-tool calls,
 2-step tool chaining, 3-way multi-source correlation, agent autonomy on an open-ended request,
@@ -109,6 +117,7 @@ why:
 | log trajectory | Added `agent_trajectory.log` | Needed an audit trail of what the agent actually did, not just its final answer |
 | Third edition | Added `BaselineAgent`, `EvalRunner`, multi-model fallback chain, `NASA_API_KEY` env var, composite workflows A/B/C | Needed a fair, reproducible baseline-vs-agent comparison and stronger multi-tool orchestration evidence for judging |
 | Final edition (this version) | Fixed `getExoplanetArchive`/`getTechPortProjects` to actually honor their declared parameters instead of ignoring them; `fetchFromUrl` now returns an explicit `NASA_API_ERROR` marker instead of silently passing an HTTP error body off as data; added a grounding rule so the agent can no longer claim "retrieved from NASA" without an actual tool call in that turn; made eval dates fixed instead of "today" for reproducibility; added automatic tool-selection PASS/FAIL scoring | An external code review caught that two tools had a description/behavior mismatch, and testing caught the agent fabricating an "exoplanet archive" answer with zero tool calls on one run — both are credibility risks for a judged submission and needed fixing before submission, not after |
+| Post-review hardening | Broadened key rotation to also trigger on `403 PERMISSION_DENIED` (not just 429/503/quota) — different free-tier API keys can have access to different models, so a per-key access error is often worth retrying with the next key, not failing outright. Fixed a URL-building bug in `getExoplanetArchive` where an unescaped `<` character (`rowid<=10`) made `URI.create()` reject the request on every call with no discovery-method filter — the whole ADQL query is now URL-encoded in one pass instead of hand-splicing raw and encoded fragments. Added connect/request timeouts, a `User-Agent` header, and full (untruncated) network-exception logging to the console | Live evaluation runs surfaced both bugs directly: some queries were failing with `agent_tools=0` purely because one bad API key killed the whole request instead of rotating past it, and `exoplanets` was failing 100% of the time with a truncated, undiagnosable error message. Tool-selection score went from 6/8 to the current 8/8 after both fixes |
 
 ## Hot take / lesson learned
 
