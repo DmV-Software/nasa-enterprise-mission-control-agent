@@ -1,0 +1,27 @@
+# apod_fixed_date — agent
+
+**Query:** What was NASA's Astronomy Picture of the Day on 2026-08-20, including title and explanation?
+
+**Expected tools:** getAstronomyPictureOfTheDay
+
+**Tool calls:** 1
+
+**Trajectory:**
+- getAstronomyPictureOfTheDay(2026-08-20) -> {"copyright":"Eddie Sgarbossa","date":"2026-08-20","explanation":"Like an illustration in a galactic Just So Story, the Elephant's Trunk Nebula winds through th
+
+**Output:**
+
+[TOPIC: astronomy_picture_of_the_day]
+
+### NASA Astronomy Picture of the Day Report
+**Date:** 2026-08-20  
+**Title:** The Elephant's Trunk in Cepheus  
+**Copyright:** Eddie Sgarbossa  
+**Media Type:** Image  
+
+#### Explanation
+Like an illustration in a galactic Just So Story, the Elephant's Trunk Nebula winds through the emission region and young star cluster complex IC 1396, in the high and far off constellation of Cepheus. Also known as vdB 142, this cosmic elephant's trunk is over 20 light-years long. The detailed telescopic view features the bright swept-back ridges and pockets of cool interstellar dust and gas that abound in the region. But the dark, tendril-shaped clouds contain the raw material for star formation and hide protostars within. Nearly 3,000 light-years distant, the relatively faint IC 1396 complex covers a large region on the sky, spanning over 5 degrees. Top to bottom this proboscidean-like rendition reaches across an almost 1 degree wide field of view, though. That's a little less than the angular size of 2 full moons.
+
+**Image URLs:**
+* Standard Resolution: [View Image](https://apod.nasa.gov/apod/image/2608/IMG_5201_sgarbossa1024.jpeg)
+* High Definition: [View HD Image](https://apod.nasa.gov/apod/image/2608/IMG_5201.jpeg)

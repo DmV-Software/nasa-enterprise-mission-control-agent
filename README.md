@@ -160,3 +160,7 @@ your `NASA_API_KEY`'s hourly rate limit.
 **Known limitation:** the evaluation harness checks tool-selection correctness automatically, but
 does not grade the factual accuracy of the generated prose — read the transcripts in
 `reports/eval/` for that.
+
+Demo Video:
+https://youtu.be/v_EfBnrCQ-s
+
