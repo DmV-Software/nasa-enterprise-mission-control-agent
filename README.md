@@ -1,7 +1,6 @@
 # NASA Enterprise Mission Control Agent
 
-A NASA multi-domain research agent built with LangChain4j + Gemini, submitted to the micro1
-Agentic Workflows Hackathon.
+A NASA multi-domain research agent built with LangChain4j + Gemini.
 
 **Solution video:** https://youtu.be/v_EfBnrCQ-s
 
