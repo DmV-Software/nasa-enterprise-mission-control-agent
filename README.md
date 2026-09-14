@@ -3,8 +3,7 @@
 A NASA multi-domain research agent built with LangChain4j + Gemini, submitted to the micro1
 Agentic Workflows Hackathon.
 
-**Solution video:** [add your video link here — YouTube/Loom unlisted link, or note "see attached
-file" if uploading directly to the submission form]
+**Solution video:** https://youtu.be/v_EfBnrCQ-s
 
 ## Who has this problem
 
