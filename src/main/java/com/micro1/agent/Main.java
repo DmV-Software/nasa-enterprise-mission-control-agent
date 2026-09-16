@@ -150,7 +150,7 @@ public class Main {
                     // clearly non-recoverable error (bad request shape, network parse failure, etc.)
                     // should skip straight to propagating without burning through the whole pool.
                     boolean isRetryable = msg.contains("429") || msg.contains("RESOURCE_EXHAUSTED")
-                            ||  lowerMsg.contains("503") 
+        || lowerMsg.contains("503") 
         || lowerMsg.contains("quota")
         || lowerMsg.contains("403") 
         || lowerMsg.contains("permission_denied")
