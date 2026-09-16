@@ -150,8 +150,16 @@ public class Main {
                     // clearly non-recoverable error (bad request shape, network parse failure, etc.)
                     // should skip straight to propagating without burning through the whole pool.
                     boolean isRetryable = msg.contains("429") || msg.contains("RESOURCE_EXHAUSTED")
-                            || msg.contains("503") || msg.toLowerCase().contains("quota")
-                            || msg.contains("403") || msg.contains("PERMISSION_DENIED");
+                            ||  lowerMsg.contains("503") 
+        || lowerMsg.contains("quota")
+        || lowerMsg.contains("403") 
+        || lowerMsg.contains("permission_denied")
+        || lowerMsg.contains("unauthenticated")
+        || lowerMsg.contains("401")
+        || lowerMsg.contains("timeout")
+        || lowerMsg.contains("deadline_exceeded")
+        || lowerMsg.contains("unavailable")
+        || lowerMsg.contains("overloaded");
 
                     if (!isRetryable) {
                         // Not an access/capacity problem (e.g. malformed request) — don't burn
