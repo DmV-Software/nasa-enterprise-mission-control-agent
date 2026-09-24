@@ -1,5 +1,6 @@
 package com.micro1.agent;
 
+import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -16,18 +17,31 @@ public class NasaKnowledgeRetrieval {
     private static final String COLLECTION_NAME =
             "nasa_knowledge";
 
+    /*
+     * Must match the dimension used during ingestion.
+     */
     private static final int EMBEDDING_DIMENSION =
             768;
 
     /*
-     * LangChain4j 0.35.0 / Google AI embedding model.
+     * LangChain4j 0.35.0 / Google AI Gemini.
      */
     private static final String EMBEDDING_MODEL =
             "embedding-001";
 
+    /*
+     * Number of candidates returned to the agent.
+     */
     private static final int MAX_RESULTS =
             5;
 
+    /*
+     * Minimum semantic similarity.
+     *
+     * This is deliberately not extremely high:
+     * retrieval should return useful candidates,
+     * while the agent decides how they should be used.
+     */
     private static final double MIN_SCORE =
             0.70;
 
@@ -38,14 +52,14 @@ public class NasaKnowledgeRetrieval {
 
     public NasaKnowledgeRetrieval() {
 
-        String apiKey =
+        String geminiApiKey =
                 resolveGeminiApiKey();
 
         String qdrantHost =
-                envOrDefault(
-                        "QDRANT_HOST",
-                        "localhost"
-                );
+                requiredEnv("QDRANT_HOST");
+
+        String qdrantApiKey =
+                requiredEnv("QDRANT_API_KEY");
 
         int qdrantPort =
                 Integer.parseInt(
@@ -55,9 +69,23 @@ public class NasaKnowledgeRetrieval {
                         )
                 );
 
+        boolean qdrantTls =
+                Boolean.parseBoolean(
+                        envOrDefault(
+                                "QDRANT_TLS",
+                                "true"
+                        )
+                );
+
+        /*
+         * IMPORTANT:
+         *
+         * Retrieval uses RETRIEVAL_QUERY,
+         * while ingestion uses RETRIEVAL_DOCUMENT.
+         */
         this.embeddingModel =
                 GoogleAiEmbeddingModel.builder()
-                        .apiKey(apiKey)
+                        .apiKey(geminiApiKey)
                         .modelName(EMBEDDING_MODEL)
                         .taskType(
                                 GoogleAiEmbeddingModel.TaskType
@@ -73,13 +101,16 @@ public class NasaKnowledgeRetrieval {
                 QdrantEmbeddingStore.builder()
                         .host(qdrantHost)
                         .port(qdrantPort)
+                        .useTls(qdrantTls)
+                        .apiKey(qdrantApiKey)
                         .collectionName(
                                 COLLECTION_NAME
                         )
                         .build();
     }
 
-    public String search(String query) {
+    public String search(
+            String query) {
 
         if (query == null
                 || query.isBlank()) {
@@ -87,37 +118,80 @@ public class NasaKnowledgeRetrieval {
             return "NASA knowledge query is empty.";
         }
 
-        Embedding queryEmbedding =
-                embeddingModel
-                        .embed(query)
-                        .content();
+        String normalizedQuery =
+                query.trim();
 
-        EmbeddingSearchRequest request =
-                EmbeddingSearchRequest.builder()
-                        .queryEmbedding(queryEmbedding)
-                        .maxResults(MAX_RESULTS)
-                        .minScore(MIN_SCORE)
-                        .build();
+        try {
 
-        List<EmbeddingMatch<TextSegment>> matches =
-                embeddingStore
-                        .search(request)
-                        .matches();
+            Embedding queryEmbedding =
+                    embeddingModel
+                            .embed(
+                                    normalizedQuery
+                            )
+                            .content();
 
-        if (matches.isEmpty()) {
+            EmbeddingSearchRequest request =
+                    EmbeddingSearchRequest.builder()
+                            .queryEmbedding(
+                                    queryEmbedding
+                            )
+                            .maxResults(
+                                    MAX_RESULTS
+                            )
+                            .minScore(
+                                    MIN_SCORE
+                            )
+                            .build();
 
-            return "No relevant NASA knowledge was found "
-                    + "for the query.";
+            List<EmbeddingMatch<TextSegment>>
+                    matches =
+                    embeddingStore
+                            .search(request)
+                            .matches();
+
+            if (matches.isEmpty()) {
+
+                return
+                        "No sufficiently relevant NASA "
+                                + "documentation was found "
+                                + "for the query.";
+            }
+
+            return formatResults(
+                    normalizedQuery,
+                    matches
+            );
+
+        } catch (Exception e) {
+
+            /*
+             * Retrieval failure is explicit.
+             *
+             * We do not convert infrastructure errors
+             * into an apparently valid empty result.
+             */
+            return
+                    "NASA_KNOWLEDGE_RETRIEVAL_ERROR: "
+                            + e.getMessage();
         }
+    }
+
+    private String formatResults(
+            String query,
+            List<EmbeddingMatch<TextSegment>>
+                    matches) {
 
         StringBuilder result =
                 new StringBuilder();
 
         result.append(
-                "NASA knowledge search results:\n\n"
+                "NASA knowledge retrieval results "
+                        + "for query: \""
+                        + query
+                        + "\"\n\n"
         );
 
-        int index = 1;
+        int rank = 1;
 
         for (EmbeddingMatch<TextSegment> match
                 : matches) {
@@ -125,12 +199,79 @@ public class NasaKnowledgeRetrieval {
             TextSegment segment =
                     match.embedded();
 
+            Metadata metadata =
+                    segment.metadata();
+
+            String title =
+                    metadata.getString(
+                            "title"
+                    );
+
+            String sourceUrl =
+                    metadata.getString(
+                            "source_url"
+                    );
+
+            String documentId =
+                    metadata.getString(
+                            "document_id"
+                    );
+
+            String contentHash =
+                    metadata.getString(
+                            "content_hash"
+                    );
+
+            String chunkIndex =
+                    metadata.getString(
+                            "chunk_index"
+                    );
+
+            result.append(
+                    "SOURCE "
+                            + rank
+                            + "\n"
+            );
+
+            result.append(
+                    "Title: "
+                            + safe(title)
+                            + "\n"
+            );
+
+            result.append(
+                    "URL: "
+                            + safe(sourceUrl)
+                            + "\n"
+            );
+
+            result.append(
+                    "Document ID: "
+                            + safe(documentId)
+                            + "\n"
+            );
+
+            result.append(
+                    "Content hash: "
+                            + safe(contentHash)
+                            + "\n"
+            );
+
+            result.append(
+                    "Chunk: "
+                            + safe(chunkIndex)
+                            + "\n"
+            );
+
             result.append(
                     String.format(
-                            "[%d] relevance=%.4f%n",
-                            index++,
+                            "Relevance score: %.4f%n",
                             match.score()
                     )
+            );
+
+            result.append(
+                    "Content:\n"
             );
 
             result.append(
@@ -140,9 +281,21 @@ public class NasaKnowledgeRetrieval {
             result.append(
                     "\n\n"
             );
+
+            rank++;
         }
 
-        return result.toString().trim();
+        return result
+                .toString()
+                .trim();
+    }
+
+    private static String safe(
+            String value) {
+
+        return value == null
+                ? ""
+                : value;
     }
 
     private static String resolveGeminiApiKey() {
@@ -181,10 +334,27 @@ public class NasaKnowledgeRetrieval {
         }
 
         throw new IllegalStateException(
-                "Gemini API key not found. "
-                        + "Set GEMINI_EMBEDDING_API_KEY, "
-                        + "GEMINI_API_KEY, or GEMINI_API_KEYS."
+                "Gemini API key not found."
         );
+    }
+
+    private static String requiredEnv(
+            String name) {
+
+        String value =
+                System.getenv(name);
+
+        if (value == null
+                || value.isBlank()) {
+
+            throw new IllegalStateException(
+                    "Required environment variable "
+                            + name
+                            + " is not set."
+            );
+        }
+
+        return value.trim();
     }
 
     private static String envOrDefault(
@@ -194,7 +364,9 @@ public class NasaKnowledgeRetrieval {
         String value =
                 System.getenv(name);
 
-        if (value == null || value.isBlank()) {
+        if (value == null
+                || value.isBlank()) {
+
             return defaultValue;
         }
 
