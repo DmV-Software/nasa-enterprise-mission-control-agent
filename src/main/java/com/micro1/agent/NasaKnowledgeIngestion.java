@@ -431,40 +431,8 @@ public class NasaKnowledgeIngestion {
                         )
                         .content();
 
-        /*
-         * Deterministic UUID per source + chunk index.
-         *
-         * Qdrant/LangChain4j can therefore use stable IDs
-         * instead of generating a different ID on every run.
-         */
-        List<String> ids =
-                new ArrayList<>(
-                        enrichedSegments.size()
-                );
-
-        for (int i = 0;
-             i < enrichedSegments.size();
-             i++) {
-
-            String stableKey =
-                    documentId
-                            + ":"
-                            + i;
-
-            ids.add(
-                    UUID.nameUUIDFromBytes(
-                            stableKey.getBytes(
-                                    StandardCharsets.UTF_8
-                            )
-                    ).toString()
-            );
-        }
-
-        /*
-         * One batch write.
-         */
+                        
         embeddingStore.addAll(
-                ids,
                 embeddings,
                 enrichedSegments
         );
