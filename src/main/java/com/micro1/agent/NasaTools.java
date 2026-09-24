@@ -19,6 +19,11 @@ public class NasaTools {
     // ~50/day per IP, which is what caused the OVER_RATE_LIMIT reports already sitting in
     // reports/ from earlier testing. Set NASA_API_KEY in your environment before running.
     private static final String NASA_API_KEY = resolveNasaApiKey();
+    private final NasaKnowledgeRetrieval nasaKnowledgeRetrieval;
+    public NasaTools() {
+    this.nasaKnowledgeRetrieval =
+            new NasaKnowledgeRetrieval();
+}
 
     private static String resolveNasaApiKey() {
         String key = System.getenv("NASA_API_KEY");
@@ -222,6 +227,17 @@ public class NasaTools {
         record("calculateKineticEnergy", massKg + "kg," + velocityKmPerSec + "km/s", String.valueOf(joules));
         return joules;
     }
+
+
+@Tool("Searches NASA technical and mission documentation.")
+public String searchNasaKnowledge(String query) {
+
+    String result = nasaKnowledgeRetrieval.search(query);
+
+    record("searchNasaKnowledge", query, result);
+
+    return result;
+}
 
 
     private String fetchFromUrl(String urlStr) {
