@@ -1,6 +1,6 @@
 # NASA Enterprise Mission Control Agent
 
-A NASA multi-domain research agent built with LangChain4j + Gemini.
+A NASA multi-domain research agent built with LangChain4j + Gemini with RAG-based knowledge grounding alongside live NASA data.
 
 **Solution video:** https://youtu.be/v_EfBnrCQ-s
 
@@ -35,9 +35,23 @@ handling, and formatting overhead every time this workflow repeats.
 | Manually chaining NEO data → mass/velocity → impact energy | **Composite Workflow A**: `getNearEarthAsteroids` → `calculateKineticEnergy`, agent-orchestrated, no user-scripted steps |
 | Manually cross-checking flares / CMEs / geomagnetic storms for the same window | **Composite Workflow B**: `getSolarFlareData` + `getDonkiCmeData` + `getGeomagneticStormData` called together, synthesized into one correlated briefing |
 | Manually assembling a daily multi-domain briefing | **Composite Workflow C**: APOD + Mars rover photos + EPIC Earth imagery combined into one digest |
+| Relying only on the model's training knowledge for NASA technical context | RAG knowledge tool retrieves relevant NASA technical and mission documentation from the vector store, providing an additional grounding path alongside live NASA APIs |
 | Silent data loss on a NASA rate limit / connection reset | `fetchFromUrl` retries transient failures (3 attempts, backoff) and returns an explicit `NASA_API_ERROR` marker instead of quietly returning an error page as if it were data |
 | Gemini free-tier rate limits interrupting a session | Model fallback chain (`gemini-3.5-flash → gemini-3.5-flash-lite → gemini-3.1-flash-lite`) combined with multi-key rotation — both baseline and agent go through the same resilience layer |
 | Disk clutter from clarification back-and-forth | Reports are only written for substantive answers; `[TOPIC: clarification_required]` turns are logged to the trajectory but not saved as reports |
+
+## RAG / Knowledge Grounding
+
+The agent also integrates a RAG-based knowledge layer for NASA technical and mission documentation. This complements live NASA API data with retrieved domain knowledge rather than relying on the model's training data alone.
+
+The RAG pipeline uses document ingestion, chunking, embeddings, vector search, and Qdrant as the vector store. The retrieval capability is exposed to the agent as a tool, allowing the model to invoke knowledge search when a question requires technical or mission documentation.
+
+This creates two complementary grounding paths:
+
+- **Live-data grounding** — current or date-specific information retrieved directly from NASA APIs.
+- **Knowledge grounding** — relevant NASA technical and mission documentation retrieved through RAG.
+
+The agent can combine both sources in the same research workflow, using live measurements or observations together with the technical context needed to interpret them.
 
 ### Flagship demo: Asteroid Impact Threat Assessment (`neo_plus_kinetic`)
 
@@ -61,7 +75,7 @@ queries** through two configurations that share everything except tool access:
 
 ```
 Baseline: Gemini, zero tools, zero live data   (the "one direct prompt" baseline)
-Agent:    Gemini, 10 NASA tools, live data, chat memory
+Agent:    Gemini, 10 NASA tools, live data, RAG knowledge retrieval, chat memory
 ```
 
 Both go through the identical model-fallback + API-key rotation layer (`Main.callWithFallback`),
