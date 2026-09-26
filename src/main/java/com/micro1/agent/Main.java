@@ -149,17 +149,25 @@ public class Main {
                     // different model access). Both cases are worth trying the next key for — only a
                     // clearly non-recoverable error (bad request shape, network parse failure, etc.)
                     // should skip straight to propagating without burning through the whole pool.
-                    boolean isRetryable = msg.contains("429") || msg.contains("RESOURCE_EXHAUSTED")
-        || lowerMsg.contains("503") 
-        || lowerMsg.contains("quota")
-        || lowerMsg.contains("403") 
-        || lowerMsg.contains("permission_denied")
-        || lowerMsg.contains("unauthenticated")
-        || lowerMsg.contains("401")
-        || lowerMsg.contains("timeout")
-        || lowerMsg.contains("deadline_exceeded")
-        || lowerMsg.contains("unavailable")
-        || lowerMsg.contains("overloaded");
+                     boolean isRetryable = false;
+    Throwable current = e;
+
+    while (current != null) {
+        String msg = current.getMessage() != null ? current.getMessage().toLowerCase() : "";
+        
+        if (msg.contains("429") || msg.contains("resource_exhausted")
+                || msg.contains("503") || msg.contains("quota")
+                || msg.contains("403") || msg.contains("permission_denied")
+                || msg.contains("timeout") || msg.contains("401")
+                || msg.contains("unauthenticated") || msg.contains("deadline_exceeded")
+                || msg.contains("unavailable") || msg.contains("overloaded")
+                || current instanceof java.net.SocketTimeoutException
+                || current instanceof java.io.InterruptedIOException) {
+            isRetryable = true;
+            break; 
+        }
+        current = current.getCause(); 
+    }
 
                     if (!isRetryable) {
                         // Not an access/capacity problem (e.g. malformed request) — don't burn
