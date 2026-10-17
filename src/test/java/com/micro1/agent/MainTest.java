@@ -1,4 +1,4 @@
-package com.micro1.agent;
+package com.nasa.agent;
 
 
 import org.junit.jupiter.api.Test;
@@ -37,7 +37,7 @@ public class MainTest {
 
     @Test
     public void nasaToolsInstrumentationCountsRealCalls() {
-        NasaTools tools = new NasaTools();
+        NasaTools tools = new NasaTools(null);
         assertEquals(0, tools.getToolCallCount());
 
         tools.calculateKineticEnergy(1000.0, 20.0);
@@ -50,7 +50,7 @@ public class MainTest {
 
     @Test
     public void resetInstrumentationClearsCountAndLog() {
-        NasaTools tools = new NasaTools();
+        NasaTools tools = new NasaTools(null);
         tools.calculateKineticEnergy(1000.0, 20.0);
         tools.resetInstrumentation();
 
@@ -61,7 +61,7 @@ public class MainTest {
     @Test
     public void kineticEnergyFormulaIsCorrect() {
         // 0.5 * m * v^2, v converted from km/s to m/s
-        NasaTools tools = new NasaTools();
+        NasaTools tools = new NasaTools(null);
         double joules = tools.calculateKineticEnergy(2.0, 1.0); // 2 kg at 1 km/s = 1000 m/s
         assertEquals(0.5 * 2.0 * 1000.0 * 1000.0, joules, 0.0001);
     }
