@@ -1,4 +1,4 @@
-package com.micro1.agent;
+package com.nasa.agent;
 
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.service.AiServices;
@@ -90,11 +90,20 @@ public class EvalRunner {
         summary.append("| Case | Tool-selection | Baseline tools | Agent tools | Baseline latency (ms) | Agent latency (ms) | Baseline preview | Agent preview |\n");
         summary.append("|---|---|---|---|---|---|---|---|\n");
 
-        NasaTools sharedTools = new NasaTools();
+        dev.langchain4j.store.embedding.EmbeddingStore<dev.langchain4j.data.segment.TextSegment> store = VectorDbConfig.createQdrantStore();
+        dev.langchain4j.model.embedding.EmbeddingModel embeddingModel = VectorDbConfig.createRetrievalModel();
+        NasaKnowledgeRetrieval evalRetieval = new NasaKnowledgeRetrieval(embeddingModel, store);
+        NasaTools sharedTools = new NasaTools(evalRetieval);
         int passCount = 0;
 
         for (EvalCase c : CASES) {
             // --- Baseline: zero tools, zero live data ---
+            try {
+                System.out.println("[SYSTEM] Cooling down API for 5 seconds to respect rate limits...");
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             long t0 = System.currentTimeMillis();
             String baselineOutput;
             try {
