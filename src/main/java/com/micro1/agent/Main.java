@@ -1,7 +1,6 @@
-package com.micro1.agent;
+package com.nasa.agent;
 
 
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.service.AiServices;
@@ -69,6 +68,10 @@ public class Main {
         System.out.println("\u001B[32m[STATUS] Secure API Key Pool Active (" + apiKeys.size() + " keys loaded)\u001B[00m");
         System.out.println("\u001B[32m[STATUS] Model fallback chain: " + String.join(" -> ", MODEL_FALLBACK_CHAIN) + "\u001B[00m");
         System.out.println("\u001B[32m[STATUS] NASA Enterprise 10-Tool Agent initialized. Reference date: " + currentDate + "\u001B[00m");
+        System.out.println("\u001B[32m[STATUS] Initializing NASA Knowledge Database connection...\u001B[00m");
+        dev.langchain4j.store.embedding.EmbeddingStore<dev.langchain4j.data.segment.TextSegment> store = VectorDbConfig.createQdrantStore();
+        dev.langchain4j.model.embedding.EmbeddingModel model = VectorDbConfig.createRetrievalModel();
+        NasaKnowledgeRetrieval globalRetrieval = new NasaKnowledgeRetrieval(model, store);
         System.out.println("Type 'evals' to run automated test suite, or 'exit' to quit.");
 
         Scanner scanner = new Scanner(System.in);
@@ -93,7 +96,7 @@ public class Main {
 
             try {
                 System.out.println("\u001B[36m[SYSTEM] Processing request...\u001B[00m");
-                String response = callAgentWithKeyRotation(currentDate, userInput);
+                String response = callAgentWithKeyRotation(currentDate, userInput, globalRetrieval);
                 System.out.println("\n" + response);
                 saveReportToFile(response, userInput);
             } catch (Exception e) {
@@ -104,7 +107,8 @@ public class Main {
                         "**Action Required:** Please stand by and re-transmit your query in a few moments once the network window resets.";
 
                 System.out.println("\n" + fallbackResponse);
-                logTrajectory(userInput, "rate_limit_error", "UPLINK_FAILURE_HANDLED"); }
+                logTrajectory(userInput, "rate_limit_error", "UPLINK_FAILURE_HANDLED");
+            }
         }
         scanner.close();
     }
@@ -142,6 +146,7 @@ public class Main {
                     return result;
                 } catch (Exception e) {
                     lastError = e;
+                    //e.printStackTrace();
                     String msg = e.getMessage() != null ? e.getMessage() : "";
                     // 429/503/quota = capacity problem (this key/model is temporarily maxed out).
                     // 403/PERMISSION_DENIED = access problem, but often PER-KEY: not every API key
@@ -149,25 +154,25 @@ public class Main {
                     // different model access). Both cases are worth trying the next key for — only a
                     // clearly non-recoverable error (bad request shape, network parse failure, etc.)
                     // should skip straight to propagating without burning through the whole pool.
-                     boolean isRetryable = false;
-    Throwable current = e;
+                    boolean isRetryable = false;
+                    Throwable current = e;
 
-    while (current != null) {
-        String msg = current.getMessage() != null ? current.getMessage().toLowerCase() : "";
-        
-        if (msg.contains("429") || msg.contains("resource_exhausted")
-                || msg.contains("503") || msg.contains("quota")
-                || msg.contains("403") || msg.contains("permission_denied")
-                || msg.contains("timeout") || msg.contains("401")
-                || msg.contains("unauthenticated") || msg.contains("deadline_exceeded")
-                || msg.contains("unavailable") || msg.contains("overloaded")
-                || current instanceof java.net.SocketTimeoutException
-                || current instanceof java.io.InterruptedIOException) {
-            isRetryable = true;
-            break; 
-        }
-        current = current.getCause(); 
-    }
+                    while (current != null) {
+                        msg = current.getMessage() != null ? current.getMessage().toLowerCase() : "";
+
+                        if (msg.contains("429") || msg.contains("resource_exhausted")
+                                || msg.contains("503") || msg.contains("quota")
+                                || msg.contains("403") || msg.contains("permission_denied")
+                                || msg.contains("timeout") || msg.contains("401")
+                                || msg.contains("unauthenticated") || msg.contains("deadline_exceeded")
+                                || msg.contains("unavailable") || msg.contains("overloaded")
+                                || current instanceof java.net.SocketTimeoutException
+                                || current instanceof java.io.InterruptedIOException) {
+                            isRetryable = true;
+                            break;
+                        }
+                        current = current.getCause();
+                    }
 
                     if (!isRetryable) {
                         // Not an access/capacity problem (e.g. malformed request) — don't burn
@@ -197,17 +202,18 @@ public class Main {
     }
 
 
-    public static String callAgentWithKeyRotation(String currentDate, String input) {
+    public static String callAgentWithKeyRotation(String currentDate, String input, NasaKnowledgeRetrieval retrieval) {
+        dev.langchain4j.memory.ChatMemory turnMemory =
+                dev.langchain4j.memory.chat.MessageWindowChatMemory.withMaxMessages(15);
         return callWithFallback(currentDate, input, (model, date, msg) -> {
             NasaAgent agent = AiServices.builder(NasaAgent.class)
                     .chatLanguageModel(model)
-                    .chatMemory(MessageWindowChatMemory.withMaxMessages(15))
-                    .tools(new NasaTools())
+                    .chatMemory(turnMemory)
+                    .tools(new NasaTools(retrieval))
                     .build();
             return agent.chat(date, msg);
         });
     }
-
 
     /**
      * Pulls the "[TOPIC: some_topic]" tag the agent is instructed to put on the first line
