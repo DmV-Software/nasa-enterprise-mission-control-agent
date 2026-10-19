@@ -22,7 +22,7 @@ import java.util.Map;
 /**
  * Wrapper around langchain4j's {@code QdrantEmbeddingStore} that fixes {@code search()}.
  *
- * <p><b>Why it exists.</b> langchain4j-qdrant 0.35.0 asks Qdrant to return the stored vector of every
+ * <p><b>Why it exists.</b> langchain4j-qdrant 0.36.0 asks Qdrant to return the stored vector of every
  * hit ({@code with_vectors = true}) and then recomputes cosine similarity locally against the query
  * embedding. It reads the vector from the legacy {@code Vector.data} field of the gRPC response.
  * Current Qdrant servers (1.10+ / Qdrant Cloud) no longer fill that field, so the stored vector comes
