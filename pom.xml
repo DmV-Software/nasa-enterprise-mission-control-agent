@@ -38,17 +38,17 @@
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-google-ai-gemini</artifactId>
-            <version>0.35.0</version>
+            <version>0.36.0</version>
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j</artifactId>
-            <version>0.35.0</version>
+            <version>0.36.0</version>
         </dependency>
 <dependency>
     <groupId>dev.langchain4j</groupId>
     <artifactId>langchain4j-qdrant</artifactId>
-    <version>0.35.0</version>
+    <version>0.36.0</version>
 </dependency>
 <dependency>
     <groupId>org.jsoup</groupId>
