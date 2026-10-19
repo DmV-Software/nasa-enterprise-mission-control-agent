@@ -79,11 +79,11 @@ public class NasaKnowledgeRetrieval {
 
 
             result.append("SOURCE ").append(rank).append("\n");
-            result.append("Title: ").append(safe(metadata.getString("title"))).append("\n");
-            result.append("URL: ").append(safe(metadata.getString("source_url"))).append("\n");
-            result.append("Document ID: ").append(safe(metadata.getString("document_id"))).append("\n");
-            result.append("Content hash: ").append(safe(metadata.getString("content_hash"))).append("\n");
-            result.append("Chunk: ").append(safe(metadata.getString("chunk_index"))).append("\n");
+            result.append("Title: ").append(meta(metadata, "title")).append("\n");
+            result.append("URL: ").append(meta(metadata, "source_url")).append("\n");
+            result.append("Document ID: ").append(meta(metadata, "document_id")).append("\n");
+            result.append("Content hash: ").append(meta(metadata, "content_hash")).append("\n");
+            result.append("Chunk: ").append(meta(metadata, "chunk_index")).append("\n");
             result.append(String.format("Relevance score: %.4f%n", match.score()));
             result.append("Content:\n").append(segment.text()).append("\n\n");
             rank++;
@@ -92,7 +92,13 @@ public class NasaKnowledgeRetrieval {
     }
 
 
-    private static String safe(String value) {
-        return value == null ? "" : value;
+    /**
+     * Reads a metadata value as text regardless of its stored type. "chunk_index" and "chunk_count"
+     * are written as integers during ingestion, and Metadata.getString() rejects non-String values.
+     */
+    private static String meta(Metadata metadata, String key) {
+        if (metadata == null) return "";
+        Object value = metadata.toMap().get(key);
+        return value == null ? "" : String.valueOf(value);
     }
 }
