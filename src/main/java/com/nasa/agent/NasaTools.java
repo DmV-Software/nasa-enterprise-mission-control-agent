@@ -188,7 +188,9 @@ public class NasaTools {
 
 
     @Tool("Searches NASA TechPort for space technology projects whose title or description contains the " +
-            "given keyword. Pass an empty string to get the most recent projects unfiltered.")
+            "given keyword. Pass an empty string to get the most recent projects unfiltered. LIMITED: only scans one raw " +
+            "page of the project list, so a miss does NOT mean the topic does not exist - for topics and documentation " +
+            "call searchNasaKnowledge instead (or as well).")
     public String getTechPortProjects(String searchKeyword) {
         System.out.println("[SYSTEM] Executing getTechPortProjects for keyword: " + searchKeyword);
 
@@ -229,7 +231,10 @@ public class NasaTools {
     }
 
 
-    @Tool("Searches NASA technical and mission documentation.")
+    @Tool("PRIMARY tool for NASA documentation, technologies, missions and scientific concepts (e.g. Nuclear Thermal " +
+            "Propulsion, Webb telescope, exoplanets, comets, asteroids, TechPort project pages). Semantic search over the " +
+            "indexed NASA knowledge base; returns source titles, URLs and text passages. Pass a short English phrase " +
+            "describing the topic, e.g. 'nuclear thermal propulsion technology'.")
     public String searchNasaKnowledge(String query) {
         String result = nasaKnowledgeRetrieval.search(query);
         record("searchNasaKnowledge", query, result);
