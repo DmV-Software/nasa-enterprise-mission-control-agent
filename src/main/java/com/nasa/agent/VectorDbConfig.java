@@ -6,6 +6,8 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.googleai.GoogleAiEmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore;
+import io.qdrant.client.QdrantClient;
+import io.qdrant.client.QdrantGrpcClient;
 
 
 public class VectorDbConfig {
@@ -17,13 +19,29 @@ public class VectorDbConfig {
 
 
     public static EmbeddingStore<TextSegment> createQdrantStore() {
-        return QdrantEmbeddingStore.builder()
-                .host(requiredEnv("QDRANT_HOST"))
-                .port(Integer.parseInt(envOrDefault("QDRANT_PORT", "6334")))
-                .useTls(Boolean.parseBoolean(envOrDefault("QDRANT_TLS", "true")))
-                .apiKey(requiredEnv("QDRANT_API_KEY"))
+        String host = requiredEnv("QDRANT_HOST");
+        int port = Integer.parseInt(envOrDefault("QDRANT_PORT", "6334"));
+        boolean useTls = Boolean.parseBoolean(envOrDefault("QDRANT_TLS", "true"));
+        String apiKey = requiredEnv("QDRANT_API_KEY");
+
+        // Original langchain4j store: still used for all writes (ingestion).
+        EmbeddingStore<TextSegment> langchainStore = QdrantEmbeddingStore.builder()
+                .host(host)
+                .port(port)
+                .useTls(useTls)
+                .apiKey(apiKey)
                 .collectionName(COLLECTION_NAME)
                 .build();
+
+        // Its search() is broken against current Qdrant servers (stored vector comes back empty ->
+        // "Length of vector a (0) must be equal to the length of vector b (768)"),
+        // so search goes through our own gRPC call. See SafeQdrantEmbeddingStore.
+        QdrantClient searchClient = new QdrantClient(
+                QdrantGrpcClient.newBuilder(host, port, useTls)
+                        .withApiKey(apiKey)
+                        .build());
+
+        return new SafeQdrantEmbeddingStore(langchainStore, searchClient, COLLECTION_NAME);
     }
 
 
