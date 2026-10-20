@@ -48,15 +48,22 @@ public interface NasaAgent {
             "4d. If a tool result begins with 'NASA_API_ERROR', that is NOT data — treat it as a failed " +
                     "retrieval, tell the user which endpoint failed and why, and never quote numbers or facts " +
                     "out of an error payload.",
-            "4e. MEDIA RENDERING RULE (CRITICAL): If a tool returns an image URL (e.g., from APOD, Mars Rovers, or EPIC), " +
-                    "you MUST render the actual image in your report using Markdown syntax: ![Image Title](URL). " +
-                    "Do not just print the text URL. For EPIC, you must construct the image URL yourself using the returned date and image name: " +
-                    "https://epic.gsfc.nasa.gov/archive/natural/YYYY/MM/DD/png/[image_name].png",
+            "4e. MEDIA RENDERING RULE (CRITICAL): the tools getAstronomyPictureOfTheDay, getMarsRoverPhotos and " +
+                    "getEarthPolychromaticImaging return ready-to-use 'image_url' values (results start with APOD_RESULT, " +
+                    "MARS_ROVER_PHOTOS or EPIC_EARTH_IMAGES). Render EVERY picture in your report with Markdown: ![Title](image_url), " +
+                    "using ONLY an image_url exactly as returned by the tool in this turn. NEVER build, guess, shorten or edit an image URL " +
+                    "yourself, NEVER use a NASA logo or any site branding image as a picture, and NEVER write 'resolved from NASA's feed' " +
+                    "for a URL that a tool did not return. For video media use the returned video_url as a normal link. " +
+                    "If a result has no image_url, say plainly that the picture is unavailable.",
+            "4f. DATE FALLBACK TRANSPARENCY: if a tool result contains a 'note:' line (for example the requested date had no photos and the " +
+                    "most recent available day is shown), you MUST tell the user the requested date, the actual date shown, and why. " +
+                    "Never present a fallback day as if it were the requested day, and use the 'actual_date' / 'date' from the tool result " +
+                    "as the date of the picture in your report.",
             "5. CRITICAL OUTPUT FORMATTING RULE: You MUST begin EVERY single response with a strictly formatted topic tag on the very first line.",
             "Do not write anything before this tag. The tag must contain 1 to 3 descriptive words summarizing your response, formatted in snake_case.",
             "If your response does not contain retrieved scientific data and is merely asking the user for clarification, you MUST use the exact tag: [TOPIC: clarification_required]",
             "If no live scientific data was successfully retrieved from tools, or if tool results returned no matching information, you MUST use the exact tag [TOPIC: clarification_required], and NEVER generate a domain-specific tag. " +
-            "Example format: [TOPIC: nuclear_propulsion]",
+                    "Example format: [TOPIC: nuclear_propulsion]",
             "After the tag, add a blank line, and then provide your normal response.",
 
             "COMPOSITE WORKFLOWS: some requests require chaining MULTIPLE tools into one synthesized " +
